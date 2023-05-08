@@ -2,6 +2,8 @@ import sys
 import numpy as np
 import cv2
 import math
+import moviepy.editor as mp
+import subprocess
 
 THRESHOLD_RATIO = 2000
 MIN_AVG_RED = 60
@@ -203,14 +205,14 @@ def analyze_video(input_video_path, output_video_path):
     }
 
 def process_video(video_data, yield_preview=False):
-    
+    tempfile_path = "temp.mp4"
     cap = cv2.VideoCapture(video_data["input_video_path"])
 
     frame_width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
     frame_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    new_video = cv2.VideoWriter(video_data["output_video_path"], fourcc, video_data["fps"], (int(frame_width), int(frame_height)))      
+    new_video = cv2.VideoWriter(tempfile_path, fourcc, video_data["fps"], (int(frame_width), int(frame_height)))      
 
     filter_matrices = video_data["filters"]
     filter_indices = video_data["filter_indices"]
@@ -270,7 +272,20 @@ def process_video(video_data, yield_preview=False):
     cap.release()
     new_video.release()
 
+    combine_audio_with_video(video_data["input_video_path"],tempfile_path,video_data["output_video_path"])
+    fix_metadata(video_data["input_video_path"],video_data["output_video_path"])
 
+def combine_audio_with_video(original_path,tempfile_path, input_path):
+    #fix audio
+    audio_clip = mp.AudioFileClip(original_path)
+    video_clip = mp.VideoFileClip(tempfile_path)
+    result_clip = video_clip.set_audio(audio_clip)
+    result_clip.write_videofile(input_path, fps=video_clip.fps)
+    
+def fix_metadata(input_path, output_path):
+    cmd = ['exiftool','-tagsFromFile',input_path,'-extractEmbedded','-all:all','-FileModifyDate','-overwrite_original',output_path]
+    print(subprocess.check_output(cmd))
+    
 if __name__ == "__main__":
 
     if len(sys.argv) < 2:
