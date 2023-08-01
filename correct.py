@@ -217,12 +217,17 @@ def process_video(video_data, yield_preview=False):
     filter_matrices = video_data["filters"]
     filter_indices = video_data["filter_indices"]
 
-    filter_matrix_size = len(filter_matrices[0])
-    def get_interpolated_filter_matrix(frame_number):
+    if (len(filter_matrices) == 0):
+        filter_matrix_size = 0
+        print("WARNING: unable to retrieve filter matrix size")
+        def get_interpolated_filter_matrix(frame_number):
+            return [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+    else:
+        filter_matrix_size = len(filter_matrices[0])
+        def get_interpolated_filter_matrix(frame_number):
+            return [np.interp(frame_number, filter_indices, filter_matrices[..., x]) for x in range(filter_matrix_size)]
 
-        return [np.interp(frame_number, filter_indices, filter_matrices[..., x]) for x in range(filter_matrix_size)]
-
-    print("Processing...")
+    print("Processing... (matrix size=" + str(filter_matrix_size) + ", " + str(len(filter_matrices)) + ")")
 
     frame_count = video_data["frame_count"]
 
@@ -280,10 +285,10 @@ def combine_audio_with_video(original_path,tempfile_path, input_path):
     audio_clip = mp.AudioFileClip(original_path)
     video_clip = mp.VideoFileClip(tempfile_path)
     result_clip = video_clip.set_audio(audio_clip)
-    result_clip.write_videofile(input_path, fps=video_clip.fps)
+    result_clip.write_videofile(input_path, fps=video_clip.fps, codec="libx264")
     
 def fix_metadata(input_path, output_path):
-    cmd = ['exiftool','-tagsFromFile',input_path,'-extractEmbedded','-all:all','-FileModifyDate','-overwrite_original',output_path]
+    cmd = ['exiftool','-tagsFromFile',input_path,'-extractEmbedded','-all:all','--exif:Orientation','-FileModifyDate','-overwrite_original',output_path]
     print(subprocess.check_output(cmd))
     
 if __name__ == "__main__":
@@ -305,7 +310,8 @@ if __name__ == "__main__":
         corrected_mat = correct(mat)
 
         cv2.imwrite(sys.argv[3], corrected_mat)
-    
+        print("Fixing image metadata...")
+        fix_metadata(sys.argv[2], sys.argv[3])
     else:
 
         for item in analyze_video(sys.argv[2], sys.argv[3]):
